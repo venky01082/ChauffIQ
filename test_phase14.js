@@ -46,9 +46,24 @@
 const fs = require("fs");
 const path = require("path");
 
+if (fs.existsSync(".env.local")) {
+  const envContent = fs.readFileSync(".env.local", "utf8");
+  for (const line of envContent.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith("#")) {
+      const idx = trimmed.indexOf("=");
+      if (idx > 0) {
+        const key = trimmed.slice(0, idx).trim();
+        const val = trimmed.slice(idx + 1).trim();
+        if (!process.env[key]) process.env[key] = val;
+      }
+    }
+  }
+}
+
 const BASE_URL = "https://asia-southeast1-chauffiq-a0366.cloudfunctions.net";
 const PROJECT_ID = "chauffiq-a0366";
-const BOOTSTRAP_SECRET = "chauffiq-admin-bootstrap-secret-key-2026";
+const BOOTSTRAP_SECRET = process.env.ADMIN_BOOTSTRAP_SECRET || "";
 
 const GREEN = "[32m";
 const RED = "[31m";
@@ -105,10 +120,11 @@ async function registerAndLogin(suffix) {
   const pass = "AdminAuditPass!88";
   const name = `P14User_${suffix}`;
 
-  const reg = await apiPost("register", null, { email, password: pass, name });
+  const devHeaders = BOOTSTRAP_SECRET ? { "x-admin-bootstrap-key": BOOTSTRAP_SECRET } : {};
+  const reg = await apiPost("register", null, { email, password: pass, name }, devHeaders);
   if (!reg.body.success) throw new Error(`Register failed for ${email}: ${JSON.stringify(reg.body)}`);
 
-  const login = await apiPost("login", null, { email, password: pass });
+  const login = await apiPost("login", null, { email, password: pass }, devHeaders);
   if (!login.body.success) throw new Error(`Login failed for ${email}`);
 
   return { token: login.body.idToken, uid: login.body.user.uid, email, pass, name };

@@ -28,7 +28,7 @@ export function TripHistoryPage() {
   const [sortOrder, setSortOrder] = useState('NEWEST'); // NEWEST | OLDEST
 
   const [rides, setRides] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [alert, setAlert] = useState(null);
 
   // Selected ride for read-only detail view
@@ -36,7 +36,6 @@ export function TripHistoryPage() {
   const [copiedId, setCopiedId] = useState(false);
 
   const fetchHistory = useCallback(async () => {
-    setLoading(true);
     setAlert(null);
     try {
       const res = await chauffiq.rides.getTripHistory({

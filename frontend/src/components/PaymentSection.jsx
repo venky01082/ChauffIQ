@@ -13,8 +13,10 @@ export function PaymentSection({
   const [alert, setAlert] = useState(null);
 
   const fetchPayment = useCallback(async () => {
-    if (!rideId) return;
-    setLoading(true);
+    if (!rideId) {
+      setLoading(false);
+      return;
+    }
     try {
       const res = await chauffiq.payments.getPayment({ rideId });
       if (res && res.payment) {

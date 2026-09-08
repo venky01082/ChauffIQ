@@ -79,7 +79,6 @@ export function FamilyMonitoringPage() {
 
   // Load authorized family rides on mount
   const loadMonitoredRides = useCallback(async () => {
-    setLoadingMonitoredList(true);
     try {
       const res = await chauffiq.family.getFamilyRides({ limit: 10 });
       setMonitoredRides(res.rides || []);
@@ -115,11 +114,12 @@ export function FamilyMonitoringPage() {
   }, [stopAllPolling]);
 
   // Stop polling on terminal states
+  const activeStatus = activeRide?.status;
   useEffect(() => {
-    if (activeRide && isTerminal(activeRide.status)) {
+    if (activeStatus && isTerminal(activeStatus)) {
       stopAllPolling();
     }
-  }, [activeRide?.status, stopAllPolling]);
+  }, [activeStatus, stopAllPolling]);
 
   // Silent Location Poller
   const fetchLocationSilent = useCallback(async (targetId) => {

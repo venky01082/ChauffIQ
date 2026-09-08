@@ -9,6 +9,8 @@ const {getMessaging} = require("firebase-admin/messaging");
 
 // Declare SecretParam for production Google Identity Toolkit Web API Key
 const webApiKey = defineSecret("WEB_API_KEY");
+// Declare SecretParam for developer-controlled Administrator Bootstrap Key
+const adminBootstrapSecret = defineSecret("ADMIN_BOOTSTRAP_SECRET");
 
 // Initialize Firebase Admin
 initializeApp();
@@ -17,23 +19,31 @@ const auth = getAuth();
 const db = getFirestore();
 const messaging = getMessaging();
 
+// Allowed origins for CORS protection
+const ALLOWED_ORIGINS = [
+  "https://chauffiq-a0366.web.app",
+  "https://chauffiq-a0366.firebaseapp.com",
+  /^http:\/\/localhost(:\d+)?$/,
+  /^http:\/\/127\.0\.0\.1(:\d+)?$/,
+];
+
 // Firebase Functions configuration
 setGlobalOptions({
   region: "asia-southeast1",
   maxInstances: 10,
-  cors: true,
-  secrets: ["WEB_API_KEY"],
+  cors: ALLOWED_ORIGINS,
+  secrets: ["WEB_API_KEY", "ADMIN_BOOTSTRAP_SECRET"],
 });
 
 /**
  * HTTPS Function wrapper ensuring CORS middleware handles OPTIONS preflights.
- * In Firebase Functions v2, onRequest must explicitly receive { cors: true }
+ * In Firebase Functions v2, onRequest must explicitly receive cors config
  * so the CORS middleware intercepts OPTIONS preflight requests in production.
  * @param {Function} handler - Request handler
  * @return {Function} Cloud Function
  */
 const onRequest = (handler) =>
-  rawOnRequest({cors: true, invoker: "public"}, handler);
+  rawOnRequest({cors: ALLOWED_ORIGINS, invoker: "public"}, handler);
 
 // ============================================================
 // AUTH HELPER
@@ -133,18 +143,45 @@ function logAdminAction(adminUid, action, resourceId = "", details = {}) {
 
 /**
  * Sanitized logging helper for operational tracing.
+ * Emits structured GCP Cloud Logging & Error Reporting events.
  * Never logs secrets, passwords, or credentials.
  */
 const log = {
   error: (tag, msg, err) => {
     const errText = err ? (err.message || String(err)) : "";
-    console.error(`[${tag}] ${msg} ${errText}`.trim());
+    const payload = {
+      "severity": "ERROR",
+      "message": `[${tag}] ${msg} ${errText}`.trim(),
+      "tag": tag,
+      "timestamp": new Date().toISOString(),
+      "@type":
+        "type.googleapis.com/google.devtools.clouderrorreporting.v1beta1" +
+        ".ReportedErrorEvent",
+      "serviceContext": {
+        service: "chauffiq-backend",
+        version: "phase15",
+      },
+    };
+    if (err && err.stack) {
+      payload.stack_trace = err.stack;
+    }
+    console.error(JSON.stringify(payload));
   },
   warn: (tag, msg) => {
-    console.warn(`[${tag}] ${msg}`);
+    console.warn(JSON.stringify({
+      severity: "WARNING",
+      tag: tag,
+      message: msg,
+      timestamp: new Date().toISOString(),
+    }));
   },
   info: (tag, msg) => {
-    console.log(`[${tag}] ${msg}`);
+    console.log(JSON.stringify({
+      severity: "INFO",
+      tag: tag,
+      message: msg,
+      timestamp: new Date().toISOString(),
+    }));
   },
 };
 
@@ -162,6 +199,116 @@ function safeInternalError(res, userMessage, tag, error) {
     success: false,
     message: userMessage,
   });
+}
+
+/**
+ * Distributed rate limiter backed by Firestore collection _rateLimits.
+ * Uses SHA-256 hashed IP to ensure zero PII is persisted in database.
+ * @param {object} req - Express request object
+ * @param {string} action - 'register' | 'login'
+ * @param {number} maxRequests - Max requests allowed in time window
+ * @param {number} windowMs - Window duration in ms
+ * @return {Promise<{allowed: boolean, remaining: number,
+ *   retryAfterSec: number}>}
+ */
+async function checkRateLimit(
+    req,
+    action,
+    maxRequests = 25,
+    windowMs = 15 * 60 * 1000,
+) {
+  if (process.env.RATE_LIMIT_DISABLED === "true" ||
+      process.env.FUNCTIONS_EMULATOR === "true") {
+    return {allowed: true, remaining: maxRequests, retryAfterSec: 0};
+  }
+
+  // Allow developer test runners with valid ADMIN_BOOTSTRAP_SECRET
+  const devKey = req.headers["x-admin-bootstrap-key"] ||
+      req.headers["x-test-bypass-key"];
+  if (typeof devKey === "string" && devKey.length > 0) {
+    let activeSecret = null;
+    try {
+      if (typeof adminBootstrapSecret.value === "function") {
+        activeSecret = adminBootstrapSecret.value();
+      }
+    } catch (_) {
+      // Ignore if secret manager is uninitialized
+    }
+    if (!activeSecret) {
+      activeSecret = process.env.ADMIN_BOOTSTRAP_SECRET || null;
+    }
+    if (activeSecret) {
+      const bufDev = Buffer.from(devKey, "utf8");
+      const bufActive = Buffer.from(activeSecret, "utf8");
+      if (bufDev.length === bufActive.length &&
+          crypto.timingSafeEqual(bufDev, bufActive)) {
+        return {allowed: true, remaining: maxRequests, retryAfterSec: 0};
+      }
+    }
+  }
+
+  const forwarded = req.headers["x-forwarded-for"];
+  const remoteIp = req.socket ? req.socket.remoteAddress : null;
+  const rawIp = (typeof forwarded === "string" ?
+    forwarded.split(",")[0] : (req.ip || remoteIp)) || "unknown";
+  const ipHash = crypto
+      .createHash("sha256")
+      .update(String(rawIp).trim())
+      .digest("hex")
+      .slice(0, 32);
+  const docId = `${action}_${ipHash}`;
+  const docRef = db.collection("_rateLimits").doc(docId);
+
+  const now = Date.now();
+  try {
+    const result = await db.runTransaction(async (t) => {
+      const doc = await t.get(docRef);
+      if (!doc.exists) {
+        t.set(docRef, {
+          action: action,
+          count: 1,
+          windowStart: now,
+          expiresAt: new Date(now + windowMs).toISOString(),
+        });
+        return {allowed: true, remaining: maxRequests - 1, retryAfterSec: 0};
+      }
+
+      const data = doc.data() || {};
+      const windowStart = typeof data.windowStart === "number" ?
+        data.windowStart : (now - windowMs - 1000);
+      if (now - windowStart > windowMs) {
+        t.set(docRef, {
+          action: action,
+          count: 1,
+          windowStart: now,
+          expiresAt: new Date(now + windowMs).toISOString(),
+        });
+        return {allowed: true, remaining: maxRequests - 1, retryAfterSec: 0};
+      }
+
+      if ((data.count || 0) >= maxRequests) {
+        const retryAfterSec = Math.max(
+            1,
+            Math.ceil((windowStart + windowMs - now) / 1000),
+        );
+        return {allowed: false, remaining: 0, retryAfterSec: retryAfterSec};
+      }
+
+      t.update(docRef, {
+        count: (data.count || 0) + 1,
+      });
+      return {
+        allowed: true,
+        remaining: maxRequests - ((data.count || 0) + 1),
+        retryAfterSec: 0,
+      };
+    });
+
+    return result;
+  } catch (err) {
+    log.warn("checkRateLimit", `Rate limit fallback: ${err.message}`);
+    return {allowed: true, remaining: 1, retryAfterSec: 0};
+  }
 }
 
 /**
@@ -280,6 +427,18 @@ exports.register = onRequest(async (req, res) => {
       return res.status(405).json({
         success: false,
         message: "Only POST requests are allowed",
+      });
+    }
+
+    const rateLimit = await checkRateLimit(
+        req, "register", 25, 15 * 60 * 1000);
+    if (!rateLimit.allowed) {
+      res.set("Retry-After", String(rateLimit.retryAfterSec));
+      return res.status(429).json({
+        success: false,
+        message:
+          "Too many registration attempts. Please try again in " +
+          `${rateLimit.retryAfterSec} seconds.`,
       });
     }
 
@@ -1385,7 +1544,7 @@ exports.getRide = onRequest(async (req, res) => {
 // ============================================================
 
 exports.login = rawOnRequest(
-    {cors: true, secrets: [webApiKey]},
+    {cors: ALLOWED_ORIGINS, secrets: [webApiKey]},
     async (req, res) => {
       if (req.method !== "POST") {
         return res.status(405).json({
@@ -1395,6 +1554,18 @@ exports.login = rawOnRequest(
       }
 
       try {
+        const rateLimit = await checkRateLimit(
+            req, "login", 35, 15 * 60 * 1000);
+        if (!rateLimit.allowed) {
+          res.set("Retry-After", String(rateLimit.retryAfterSec));
+          return res.status(429).json({
+            success: false,
+            message:
+              "Too many login attempts. Please try again in " +
+              `${rateLimit.retryAfterSec} seconds.`,
+          });
+        }
+
         const body = req.body || {};
         const {email, password} = body;
 
@@ -2535,81 +2706,110 @@ exports.simulatePaymentResult = onRequest(async (req, res) => {
 // PHASE 14 — ADMIN DASHBOARD & OPERATIONAL VISIBILITY APIS
 // ============================================================
 
-const ADMIN_BOOTSTRAP_SECRET =
-  process.env.ADMIN_BOOTSTRAP_SECRET ||
-  "chauffiq-admin-bootstrap-secret-key-2026";
-
 /**
  * 22. BOOTSTRAP ADMIN (Developer-Controlled Setup Only)
  * Allows bootstrapping the initial administrator or designating admins.
  * Requires valid token AND developer-controlled bootstrap secret header.
  */
-exports.bootstrapAdmin = onRequest(async (req, res) => {
-  if (req.method !== "POST") {
-    return res.status(405).json({
-      success: false,
-      message: "Only POST requests are allowed",
+exports.bootstrapAdmin = rawOnRequest(
+    {cors: ALLOWED_ORIGINS, invoker: "public", secrets: [adminBootstrapSecret]},
+    async (req, res) => {
+      if (req.method !== "POST") {
+        return res.status(405).json({
+          success: false,
+          message: "Only POST requests are allowed",
+        });
+      }
+
+      try {
+        const decodedToken = await verifyToken(req);
+        const uid = decodedToken.uid;
+
+        const providedSecret =
+          req.headers["x-admin-bootstrap-key"] ||
+          req.headers["x-bootstrap-key"] ||
+          "";
+
+        const isExistingAdminDoc =
+          (await db.collection("admins").doc(uid).get()).exists;
+        const isExistingAdmin =
+          decodedToken.admin === true || isExistingAdminDoc;
+
+        let activeSecret = null;
+        try {
+          if (typeof adminBootstrapSecret.value === "function") {
+            activeSecret = adminBootstrapSecret.value();
+          }
+        } catch (_) {
+          // Secret manager may not be active in local unit test environment
+        }
+        if (!activeSecret) {
+          activeSecret = process.env.ADMIN_BOOTSTRAP_SECRET || null;
+        }
+
+        let secretValid = false;
+        if (activeSecret &&
+            typeof providedSecret === "string" &&
+            providedSecret.length > 0) {
+          const bufProvided = Buffer.from(providedSecret, "utf8");
+          const bufActive = Buffer.from(activeSecret, "utf8");
+          if (bufProvided.length === bufActive.length) {
+            secretValid = crypto.timingSafeEqual(bufProvided, bufActive);
+          }
+        }
+
+        if (!secretValid && !isExistingAdmin) {
+          log.warn(
+              "bootstrapAdmin",
+              `Unauthorized bootstrap attempt by ${uid}`,
+          );
+          return res.status(403).json({
+            success: false,
+            message:
+              "Unauthorized: Invalid or missing administrator bootstrap key",
+          });
+        }
+
+        // Set custom claims on Firebase Auth
+        await auth.setCustomUserClaims(uid, {admin: true, role: "ADMIN"});
+
+        // Write server-authoritative admin record
+        await db.collection("admins").doc(uid).set({
+          uid: uid,
+          email: decodedToken.email || "",
+          active: true,
+          role: "ADMIN",
+          grantedAt: new Date().toISOString(),
+        }, {merge: true});
+
+        // Update user profile role for UI display
+        await db.collection("users").doc(uid).set({
+          role: "ADMIN",
+        }, {merge: true});
+
+        logAdminAction(
+            uid,
+            "BOOTSTRAP_ADMIN",
+            uid,
+            {email: decodedToken.email},
+        );
+
+        return res.status(200).json({
+          success: true,
+          message: "User successfully designated as Administrator",
+          uid: uid,
+        });
+      } catch (err) {
+        if (err instanceof AuthError) {
+          return res.status(err.status).json({
+            success: false,
+            message: err.message,
+          });
+        }
+        return safeInternalError(
+            res, "Failed to bootstrap admin", "bootstrapAdmin", err);
+      }
     });
-  }
-
-  try {
-    const decodedToken = await verifyToken(req);
-    const uid = decodedToken.uid;
-
-    const providedSecret =
-      req.headers["x-admin-bootstrap-key"] ||
-      req.headers["x-bootstrap-key"] ||
-      "";
-
-    const isExistingAdminDoc =
-      (await db.collection("admins").doc(uid).get()).exists;
-    const isExistingAdmin = decodedToken.admin === true || isExistingAdminDoc;
-
-    if (providedSecret !== ADMIN_BOOTSTRAP_SECRET && !isExistingAdmin) {
-      log.warn("bootstrapAdmin", `Unauthorized bootstrap attempt by ${uid}`);
-      return res.status(403).json({
-        success: false,
-        message:
-          "Unauthorized: Invalid or missing administrator bootstrap key",
-
-      });
-    }
-
-    // Set custom claims on Firebase Auth
-    await auth.setCustomUserClaims(uid, {admin: true, role: "ADMIN"});
-
-    // Write server-authoritative admin record
-    await db.collection("admins").doc(uid).set({
-      uid: uid,
-      email: decodedToken.email || "",
-      active: true,
-      role: "ADMIN",
-      grantedAt: new Date().toISOString(),
-    }, {merge: true});
-
-    // Update user profile role for UI display
-    await db.collection("users").doc(uid).set({
-      role: "ADMIN",
-    }, {merge: true});
-
-    logAdminAction(uid, "BOOTSTRAP_ADMIN", uid, {email: decodedToken.email});
-
-    return res.status(200).json({
-      success: true,
-      message: "User successfully designated as Administrator",
-      uid: uid,
-    });
-  } catch (err) {
-    if (err instanceof AuthError) {
-      return res.status(err.status).json({
-        success: false,
-        message: err.message,
-      });
-    }
-    return safeInternalError(
-        res, "Failed to bootstrap admin", "bootstrapAdmin", err);
-  }
-});
 
 /**
  * 23. GET ADMIN OVERVIEW

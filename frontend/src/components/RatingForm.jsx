@@ -25,10 +25,11 @@ export function RatingForm({
   const [checkingExisting, setCheckingExisting] = useState(true);
   const [alert, setAlert] = useState(null);
 
-  // Check if current user has already submitted a rating for this ride
   const checkExistingRating = useCallback(async () => {
-    if (!rideId) return;
-    setCheckingExisting(true);
+    if (!rideId) {
+      setCheckingExisting(false);
+      return;
+    }
     try {
       const res = await chauffiq.rides.getRideRatings(rideId);
       if (res && Array.isArray(res.ratings)) {

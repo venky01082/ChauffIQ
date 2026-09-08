@@ -10,7 +10,7 @@ import { TripHistoryPage } from './pages/TripHistoryPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 
 function AppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, initializing } = useAuth();
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase();
@@ -39,6 +39,17 @@ function AppContent() {
       window.removeEventListener('hashchange', handleNavigation);
     };
   }, []);
+
+  if (initializing) {
+    return (
+      <div className="app-wrapper" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh' }}>
+        <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+          <div style={{ display: 'inline-block', width: '2.5rem', height: '2.5rem', border: '3px solid #6366f1', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '1rem' }} />
+          <p style={{ margin: 0, fontSize: '0.95rem' }}>Restoring ChauffIQ session...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (

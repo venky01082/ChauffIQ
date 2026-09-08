@@ -175,6 +175,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ----------------------------------------------------------
+    // _rateLimits/{docId}
+    //
+    // Distributed rate-limiting tracking collection.
+    // Zero direct client access (read or write).
+    // Managed exclusively via Cloud Functions Admin SDK.
+    // ----------------------------------------------------------
+    match /_rateLimits/{docId} {
+      allow read, write: if false;
+    }
+
   }
 }
 

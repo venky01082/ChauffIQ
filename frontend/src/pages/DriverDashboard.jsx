@@ -109,7 +109,6 @@ export function DriverDashboard() {
 
   // Load active drivers fleet
   const fetchAvailableDrivers = useCallback(async () => {
-    setLoadingDrivers(true);
     try {
       const res = await chauffiq.drivers.getAvailableDrivers();
       setAvailableDrivers(res.drivers || []);

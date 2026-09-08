@@ -103,11 +103,12 @@ export function PassengerDashboard() {
     setIsPolling(false);
   }, []);
 
+  const currentStatus = currentRide?.status;
   useEffect(() => {
-    if (currentRide && isTerminal(currentRide.status)) {
+    if (currentStatus && isTerminal(currentStatus)) {
       stopAllPolling();
     }
-  }, [currentRide?.status, stopAllPolling]);
+  }, [currentStatus, stopAllPolling]);
 
   const fetchLocationSilent = useCallback(async (rideId) => {
     if (!rideId) return;

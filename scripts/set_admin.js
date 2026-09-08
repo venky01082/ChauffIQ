@@ -15,9 +15,15 @@
 "use strict";
 
 const BASE_URL = "https://asia-southeast1-chauffiq-a0366.cloudfunctions.net";
-const BOOTSTRAP_SECRET = process.env.ADMIN_BOOTSTRAP_SECRET || "chauffiq-admin-bootstrap-secret-key-2026";
+const BOOTSTRAP_SECRET = process.env.ADMIN_BOOTSTRAP_SECRET || "";
 
 async function elevateViaApi(email, password) {
+  if (!BOOTSTRAP_SECRET) {
+    throw new Error(
+      "ADMIN_BOOTSTRAP_SECRET environment variable is required when using Cloud Functions elevation. " +
+      "Please set ADMIN_BOOTSTRAP_SECRET before running this script."
+    );
+  }
   console.log("Connecting via secure Cloud Functions bootstrap endpoint...");
   const loginResp = await fetch(`${BASE_URL}/login`, {
     method: "POST",
