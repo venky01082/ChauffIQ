@@ -1,0 +1,180 @@
+rules_version = '2';
+
+// ChauffIQ Firestore Security Rules
+//
+// Architecture note:
+// ALL writes to Firestore are performed by Cloud Functions using the
+// Firebase Admin SDK, which bypasses these rules entirely.
+// These rules protect DIRECT CLIENT SDK ACCESS ONLY.
+//
+// Rule design:
+//   - Unauthenticated users: denied everywhere.
+//   - Authenticated users: can read their own data only.
+//   - No client-initiated writes (all writes go through Cloud Functions).
+//   - No expiring wildcard rules.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----------------------------------------------------------
+    // DENY ALL by default
+    // Any collection not matched below is inaccessible.
+    // ----------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ----------------------------------------------------------
+    // users/{uid}
+    //
+    // Fields: uid, name, email, phone, role, createdAt
+    //
+    // A user may read their own profile document only.
+    // No client writes — register/createDriver write via Admin SDK.
+    // ----------------------------------------------------------
+    match /users/{uid} {
+      allow read: if request.auth != null
+                  && request.auth.uid == uid;
+      allow write: if false;
+
+      // Direct client access to FCM tokens is strictly forbidden.
+      // Token lifecycle is managed exclusively via Cloud Functions Admin SDK.
+      match /fcmTokens/{tokenId} {
+        allow read, write: if false;
+      }
+    }
+
+    // ----------------------------------------------------------
+    // drivers/{uid}
+    //
+    // Fields: uid, name, phone, vehicleNumber, vehicleModel,
+    //         rating, isAvailable, isOnline, totalTrips,
+    //         createdAt, updatedAt
+    //
+    // A driver may read their own profile document.
+    // Any authenticated user may list/read driver documents
+    // (needed for passenger-side driver discovery).
+    // No client writes — all driver writes go via Cloud Functions.
+    // ----------------------------------------------------------
+    match /drivers/{uid} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------
+    // rides/{rideId}
+    //
+    // Fields: rideId, passengerId, driverId, pickup, destination,
+    //         status, createdAt, startedAt, completedAt, updatedAt
+    //
+    // The passenger who owns the ride may read it.
+    // The assigned driver may read it.
+    // No other user may access ride documents directly.
+    // No client writes — all ride writes go via Cloud Functions.
+    // ----------------------------------------------------------
+    match /rides/{rideId} {
+      allow read: if request.auth != null
+                  && (
+                    resource.data.passengerId == request.auth.uid
+                    || resource.data.driverId == request.auth.uid
+                  );
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------
+    // tracking/{rideId}
+    //
+    // Fields: rideId, driverId, latitude, longitude, updatedAt
+    //
+    // Real-time location data — highest sensitivity.
+    // No direct client access. All access via getDriverLocation
+    // Cloud Function, which enforces passenger/driver/family auth.
+    // ----------------------------------------------------------
+    match /tracking/{rideId} {
+      allow read, write: if false;
+    }
+
+    // ----------------------------------------------------------
+    // familyMonitoring/{monitoringId}
+    //
+    // Fields: monitoringId, familyMemberId, passengerId,
+    //         rideId, active, createdAt
+    //
+    // The passenger who created the monitoring record may read it.
+    // The family member named in the record may read it.
+    // No client writes — createFamilyMonitoring writes via Admin SDK.
+    // ----------------------------------------------------------
+    match /familyMonitoring/{monitoringId} {
+      allow read: if request.auth != null
+                  && (
+                    resource.data.passengerId == request.auth.uid
+                    || resource.data.familyMemberId == request.auth.uid
+                  );
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------
+    // notifications/{notificationId}
+    //
+    // Fields: notificationId, userId, title, message,
+    //         type, read, createdAt
+    //
+    // A user may only read their own notifications.
+    // No client writes — createNotification writes via Admin SDK.
+    // ----------------------------------------------------------
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------
+    // ratings/{ratingId}
+    //
+    // Fields: ratingId, rideId, fromUid, toUid, fromRole, toRole,
+    //         rating, feedback, createdAt
+    //
+    // Only participants (rater or recipient) may read a rating.
+    // No client writes — all writes go via Cloud Functions.
+    // ----------------------------------------------------------
+    match /ratings/{ratingId} {
+      allow read: if request.auth != null
+                  && (
+                    resource.data.fromUid == request.auth.uid
+                    || resource.data.toUid == request.auth.uid
+                  );
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------
+    // payments/{paymentId}
+    //
+    // Fields: paymentId, rideId, payerUid, payeeUid, amount,
+    //         currency, status, provider, isSandbox, createdAt...
+    //
+    // Only payer (passenger) or payee (assigned driver) may read.
+    // Direct client writes strictly blocked — Cloud Functions Admin SDK only.
+    // ----------------------------------------------------------
+    match /payments/{paymentId} {
+      allow read: if request.auth != null
+                  && (
+                    resource.data.payerUid == request.auth.uid
+                    || resource.data.payeeUid == request.auth.uid
+                  );
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------
+    // admins/{uid}
+    //
+    // Server-authoritative admin privilege records.
+    // Zero direct client access (read or write).
+    // Managed exclusively via Cloud Functions Admin SDK.
+    // ----------------------------------------------------------
+    match /admins/{uid} {
+      allow read, write: if false;
+    }
+
+  }
+}
+
