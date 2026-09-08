@@ -197,15 +197,16 @@ async function syncUser(req, res) {
 
   try {
     const decodedToken = req.user || (await verifyToken(req));
-    const result = await authService.syncUserProfile(decodedToken.uid, {
-      email: decodedToken.email,
-      ...req.body,
-    });
+    const {user, isNew} = await authService.syncUserProfile(
+        decodedToken.uid,
+        req.body || {},
+        decodedToken,
+    );
 
-    return res.status(200).json({
+    return res.status(isNew ? 201 : 200).json({
       success: true,
-      message: "User profile synchronized",
-      user: result,
+      message: isNew ? "User profile created successfully" : "User profile synchronized",
+      user: user,
     });
   } catch (error) {
     if (error.status) {

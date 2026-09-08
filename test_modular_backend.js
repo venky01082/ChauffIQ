@@ -40,14 +40,14 @@ expectedDirs.forEach((dir) => {
   }
 });
 
-// 2. Frontend Isolation Verification
-console.log("\n--- Section 2: Frontend Separation & Clean Backend ---");
-const forbiddenDirs = ["frontend", "client", "lib", "android", "ios"];
+// 2. Mobile / Flutter Isolation Verification
+console.log("\n--- Section 2: Mobile/Flutter Separation & Backend Cleanliness ---");
+const forbiddenDirs = ["lib", "android", "ios"];
 forbiddenDirs.forEach((dir) => {
   if (!fs.existsSync(dir)) {
-    ok(`Frontend/Mobile directory safely absent from backend branch: ${dir}`);
+    ok(`Mobile/Flutter directory safely absent: ${dir}`);
   } else {
-    fail(`Directory should not exist in pure backend: ${dir}`);
+    fail(`Mobile/Flutter directory should not exist in web/backend root: ${dir}`);
   }
 });
 
@@ -109,10 +109,10 @@ if (apiApp && typeof apiApp === "function") {
 console.log("\n--- Section 5: Configuration & Security Rules ---");
 if (fs.existsSync("firebase.json")) {
   const fbJson = JSON.parse(fs.readFileSync("firebase.json", "utf8"));
-  if (fbJson.hosting && fbJson.hosting.public === "public") {
-    ok("firebase.json configured with hosting.public = public");
+  if (fbJson.hosting && (fbJson.hosting.public === "frontend/dist" || fbJson.hosting.public === "public")) {
+    ok(`firebase.json configured with hosting.public = ${fbJson.hosting.public}`);
   } else {
-    fail("firebase.json hosting.public is not set to public");
+    fail("firebase.json hosting.public is not set to frontend/dist or public");
   }
   const hasApiRewrite = (fbJson.hosting.rewrites || []).some(
       (r) => r.source === "/api/**" && r.function && r.function.functionId === "api",

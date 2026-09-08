@@ -1,7 +1,7 @@
 "use strict";
 
 const {db} = require("../utils/firebase");
-const {NotFoundError} = require("../utils/errors");
+const {NotFoundError, ForbiddenError} = require("../utils/errors");
 
 /**
  * Creates or registers a driver profile and upgrades user role.
@@ -102,7 +102,17 @@ async function updateLocation(driverId, {latitude, longitude, heading = 0, speed
     updatedAt: timestamp,
   };
 
-  await Promise.all([
+  if (rideId) {
+    const rideDoc = await db.collection("rides").doc(rideId).get();
+    if (!rideDoc.exists) {
+      throw new NotFoundError("Ride not found");
+    }
+    if (rideDoc.data().driverId !== driverId) {
+      throw new ForbiddenError("You are not the assigned driver for this ride");
+    }
+  }
+
+  const writes = [
     db.collection("driverLocations").doc(driverId).set(locPayload, {merge: true}),
     db.collection("drivers").doc(driverId).set({
       location: {
@@ -112,26 +122,71 @@ async function updateLocation(driverId, {latitude, longitude, heading = 0, speed
       },
       updatedAt: timestamp,
     }, {merge: true}),
-  ]);
+  ];
+
+  if (rideId) {
+    writes.push(
+        db.collection("tracking").doc(rideId).set(locPayload, {merge: true}),
+    );
+  }
+
+  await Promise.all(writes);
 
   return locPayload;
 }
 
 /**
- * Fetches real-time GPS location of a driver.
- * @param {string} driverId
+ * Fetches real-time GPS location of a driver or active ride.
+ * @param {string} identifier
+ * @param {string} [callerUid]
  * @return {Promise<object>}
  */
-async function getDriverLocation(driverId) {
-  const locDoc = await db.collection("driverLocations").doc(driverId).get();
+async function getDriverLocation(identifier, callerUid = null) {
+  // 1. Check if identifier matches an existing rideId
+  const rideDoc = await db.collection("rides").doc(identifier).get();
+  if (rideDoc.exists) {
+    const ride = rideDoc.data();
+    if (callerUid) {
+      const isPassenger = ride.passengerId === callerUid;
+      const isAssignedDriver = ride.driverId === callerUid;
+      let isFamilyMember = false;
+      if (!isPassenger && !isAssignedDriver) {
+        const famSnap = await db
+            .collection("familyMonitoring")
+            .where("rideId", "==", identifier)
+            .where("familyMemberId", "==", callerUid)
+            .where("active", "==", true)
+            .limit(1)
+            .get();
+        isFamilyMember = !famSnap.empty;
+      }
+      if (!isPassenger && !isAssignedDriver && !isFamilyMember) {
+        throw new ForbiddenError("You do not have access to this ride's location");
+      }
+    }
+
+    const trackDoc = await db.collection("tracking").doc(identifier).get();
+    if (trackDoc.exists) {
+      return trackDoc.data();
+    }
+
+    if (ride.driverId) {
+      const dLocDoc = await db.collection("driverLocations").doc(ride.driverId).get();
+      if (dLocDoc.exists) return dLocDoc.data();
+    }
+    throw new NotFoundError("Driver location not found");
+  }
+
+  // 2. Otherwise identifier is a driverId
+  const locDoc = await db.collection("driverLocations").doc(identifier).get();
   if (locDoc.exists) {
     return locDoc.data();
   }
 
-  const driverDoc = await db.collection("drivers").doc(driverId).get();
+  const driverDoc = await db.collection("drivers").doc(identifier).get();
   if (driverDoc.exists && driverDoc.data().location) {
     return {
-      driverId: driverId,
+      driverId: identifier,
       ...driverDoc.data().location,
     };
   }

@@ -6,8 +6,8 @@
 
 const { createChauffIQClient, ApiClientError } = require("./client");
 
-const BASE_URL = "http://127.0.0.1:5001/chauffiq-a0366/asia-southeast1";
-const AUTH_EMULATOR_HOST = "127.0.0.1:9099";
+const BASE_URL = process.env.BASE_URL || "http://127.0.0.1:5001/chauffiq-a0366/asia-southeast1";
+const AUTH_EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || "127.0.0.1:9099";
 
 async function runPhoneAuthTests() {
   console.log("==========================================================");

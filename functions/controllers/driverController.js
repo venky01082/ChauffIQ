@@ -196,23 +196,21 @@ async function getDriverLocation(req, res) {
   }
 
   try {
-    if (!req.user) {
-      await verifyToken(req);
-    }
-
-    const driverId = req.query.driverId || req.params.driverId;
-    if (!driverId) {
+    const decodedToken = req.user || (await verifyToken(req));
+    const identifier = req.query.rideId || req.query.driverId || req.params.rideId || req.params.driverId;
+    if (!identifier) {
       return res.status(400).json({
         success: false,
-        message: "driverId is required",
+        message: "rideId or driverId is required",
       });
     }
 
-    const location = await driverService.getDriverLocation(driverId);
+    const location = await driverService.getDriverLocation(identifier, decodedToken.uid);
 
     return res.status(200).json({
       success: true,
-      driverId,
+      rideId: req.query.rideId || undefined,
+      driverId: location.driverId || undefined,
       location,
     });
   } catch (error) {

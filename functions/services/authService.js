@@ -130,31 +130,51 @@ async function loginUser({email, password, apiKey = ""}) {
  * Synchronizes user profile with Firestore record.
  * @param {string} uid
  * @param {object} profileData
- * @return {Promise<object>}
+ * @param {object} [decodedToken]
+ * @return {Promise<{user: object, isNew: boolean}>}
  */
-async function syncUserProfile(uid, profileData = {}) {
+async function syncUserProfile(uid, profileData = {}, decodedToken = {}) {
   const userRef = db.collection("users").doc(uid);
   const existing = await userRef.get();
 
-  const updatePayload = {
-    updatedAt: new Date().toISOString(),
-  };
-  if (profileData.name) updatePayload.name = profileData.name;
-  if (profileData.phone) updatePayload.phone = profileData.phone;
-  if (profileData.photoUrl) updatePayload.photoUrl = profileData.photoUrl;
+  const tokenPhone = decodedToken.phone_number || "";
+  const tokenEmail = decodedToken.email || "";
 
   if (!existing.exists) {
-    updatePayload.uid = uid;
-    updatePayload.email = profileData.email || "";
-    updatePayload.role = profileData.role || "PASSENGER";
-    updatePayload.createdAt = new Date().toISOString();
-    await userRef.set(updatePayload);
-  } else {
-    await userRef.set(updatePayload, {merge: true});
+    const newUserData = {
+      uid: uid,
+      name: (typeof profileData.name === "string" && profileData.name.trim()) || "User",
+      email: tokenEmail || profileData.email || "",
+      phone: tokenPhone || profileData.phone || "",
+      role: profileData.role === "DRIVER" ? "DRIVER" : "PASSENGER",
+      createdAt: new Date().toISOString(),
+    };
+    await userRef.set(newUserData);
+    return {user: newUserData, isNew: true};
   }
 
-  const updatedDoc = await userRef.get();
-  return updatedDoc.data();
+  const existingData = existing.data() || {};
+  const updates = {};
+  const phoneToSet = tokenPhone || profileData.phone;
+  if (phoneToSet && existingData.phone !== phoneToSet) {
+    updates.phone = phoneToSet;
+  }
+  if (typeof profileData.name === "string" && profileData.name.trim() && !existingData.name) {
+    updates.name = profileData.name.trim();
+  }
+  if (profileData.role && (profileData.role === "PASSENGER" || profileData.role === "DRIVER") && !existingData.role) {
+    updates.role = profileData.role;
+  }
+  if (profileData.photoUrl && !existingData.photoUrl) {
+    updates.photoUrl = profileData.photoUrl;
+  }
+
+  if (Object.keys(updates).length > 0) {
+    updates.updatedAt = new Date().toISOString();
+    await userRef.set(updates, {merge: true});
+  }
+
+  return {user: Object.assign({}, existingData, updates), isNew: false};
 }
 
 /**
