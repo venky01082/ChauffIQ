@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChauffIQ Backend API &amp; Services</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #334155;
+      --success: #10b981;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      padding: 2rem 1rem;
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    h1 {
+      font-size: 2.25rem;
+      color: #fff;
+      margin-bottom: 0.5rem;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border: 1px solid var(--success);
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-top: 0.5rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    .card h2 {
+      font-size: 1.15rem;
+      color: #60a5fa;
+      margin-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    .card p, .card li {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+    .card ul {
+      list-style-type: none;
+    }
+    .card li {
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+    }
+    .card li code {
+      background: #0f172a;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      color: #38bdf8;
+      font-family: monospace;
+    }
+    .endpoints-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .endpoints-card h2 {
+      font-size: 1.25rem;
+      color: #60a5fa;
+      margin-bottom: 1rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.75rem 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      color: #cbd5e1;
+      font-weight: 600;
+    }
+    .method {
+      display: inline-block;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 0.75rem;
+    }
+    .method.post { background: #1e3a8a; color: #93c5fd; }
+    .method.get { background: #064e3b; color: #6ee7b7; }
+    .method.patch { background: #581c87; color: #d8b4fe; }
+    footer {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-top: 3rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>ChauffIQ Backend API &amp; Services</h1>
+      <p>Modular Cloud Architecture &bull; Node.js 24 &bull; Cloud Functions v2 &bull; Cloud Firestore</p>
+      <div class="badge">&bull; Production Services Active</div>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Environment &amp; Stack</h2>
+        <ul>
+          <li><span>Runtime:</span> <code>Node.js 24</code></li>
+          <li><span>Platform:</span> <code>Cloud Functions v2</code></li>
+          <li><span>Region:</span> <code>asia-southeast1</code></li>
+          <li><span>Database:</span> <code>Cloud Firestore</code></li>
+          <li><span>Auth:</span> <code>Firebase Identity Platform</code></li>
+          <li><span>Messaging:</span> <code>Firebase Cloud Messaging</code></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Security &amp; Protection</h2>
+        <ul>
+          <li><span>CORS:</span> <code>Origin Restricted</code></li>
+          <li><span>Rate Limiter:</span> <code>Sliding Window (Firestore)</code></li>
+          <li><span>Secrets:</span> <code>Google Secret Manager</code></li>
+          <li><span>Custom Claims:</span> <code>Server Authoritative</code></li>
+          <li><span>Input Validation:</span> <code>Strict Sanitization</code></li>
+          <li><span>Logging:</span> <code>GCP Cloud Error Reporting</code></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Architecture</h2>
+        <ul>
+          <li><span>Express Gateway:</span> <code>/api/v1/*</code></li>
+          <li><span>Cloud Functions:</span> <code>29 v2 HTTPS Endpoints</code></li>
+          <li><span>Controllers:</span> <code>Modular Domain Handlers</code></li>
+          <li><span>Services:</span> <code>Business Logic Isolation</code></li>
+          <li><span>Middleware:</span> <code>Auth / CORS / RateLimit</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="endpoints-card">
+      <h2>Primary API Gateway Endpoints (/api/v1/*)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Endpoint</th>
+            <th>Authentication</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/api/v1/auth/register</code></td>
+            <td>Public (Rate-limited)</td>
+            <td>Register Passenger, Driver, or Family Member</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/api/v1/auth/login</code></td>
+            <td>Public (Rate-limited)</td>
+            <td>Authenticate with email and password</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/api/v1/drivers/register</code></td>
+            <td>Bearer Token (Driver)</td>
+            <td>Submit driver vehicle and license profile</td>
+          </tr>
+          <tr>
+            <td><span class="method patch">PATCH</span></td>
+            <td><code>/api/v1/drivers/availability</code></td>
+            <td>Bearer Token (Driver)</td>
+            <td>Toggle online/offline driver availability</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/api/v1/drivers/location</code></td>
+            <td>Bearer Token (Driver)</td>
+            <td>Update real-time GPS coordinates</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/api/v1/drivers/available</code></td>
+            <td>Bearer Token</td>
+            <td>List available nearby drivers</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/api/v1/rides/book</code></td>
+            <td>Bearer Token (Passenger)</td>
+            <td>Request and book a new ride</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/api/v1/rides/:rideId</code></td>
+            <td>Bearer Token (Participant)</td>
+            <td>Fetch ride details and real-time status</td>
+          </tr>
+          <tr>
+            <td><span class="method patch">PATCH</span></td>
+            <td><code>/api/v1/rides/:rideId/status</code></td>
+            <td>Bearer Token (Driver/Rider)</td>
+            <td>Update ride lifecycle (ACCEPTED, ARRIVED, etc.)</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/api/v1/trips/history</code></td>
+            <td>Bearer Token</td>
+            <td>Fetch paginated trip history</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/api/v1/payments</code></td>
+            <td>Bearer Token</td>
+            <td>Initiate sandbox or card payment</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/api/v1/ratings</code></td>
+            <td>Bearer Token</td>
+            <td>Submit ride rating and review</td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><code>/api/v1/notifications/fcm-token</code></td>
+            <td>Bearer Token</td>
+            <td>Register FCM token for push notifications</td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><code>/api/v1/admin/overview</code></td>
+            <td>Bearer Token (Admin)</td>
+            <td>Fetch aggregated platform KPIs</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <footer>
+      <p>&copy; 2026 ChauffIQ. All rights reserved. Backend API Specification &amp; Services Portal.</p>
+    </footer>
+  </div>
+</body>
+</html>

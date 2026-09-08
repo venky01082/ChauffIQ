@@ -1,0 +1,25 @@
+{
+  "name": "chauffiq-backend",
+  "version": "1.0.0",
+  "description": "ChauffIQ Backend — Modular Cloud Functions v2, Firestore, Firebase Auth & Express Gateway",
+  "scripts": {
+    "lint": "npm --prefix functions run lint",
+    "test": "node test_modular_backend.js && node test_phase15.js",
+    "test:modular": "node test_modular_backend.js",
+    "test:phase15": "node test_phase15.js",
+    "test:phase14": "node test_phase14.js",
+    "test:all": "node test_phase15.js",
+    "deploy": "firebase deploy",
+    "deploy:functions": "firebase deploy --only functions",
+    "deploy:firestore": "firebase deploy --only firestore",
+    "deploy:hosting": "firebase deploy --only hosting",
+    "emulators": "firebase emulators:start",
+    "set-admin": "node scripts/set_admin.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "author": "ChauffIQ Engineering",
+  "license": "UNLICENSED",
+  "private": true
+}
