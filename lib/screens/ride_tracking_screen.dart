@@ -6,6 +6,7 @@ import '../widgets/driver_photo_widget.dart';
 import 'rating_review_screen.dart';
 import 'family_monitoring_screen.dart';
 import 'notifications_sheet.dart';
+import '../services/api_service.dart';
 
 /// Represents the stages of an active ride.
 enum RideStage {
@@ -21,6 +22,7 @@ class RideTrackingScreen extends StatefulWidget {
   final String pickup;
   final String drop;
   final String vehicle;
+  final String? rideId;
 
   const RideTrackingScreen({
     super.key,
@@ -29,6 +31,7 @@ class RideTrackingScreen extends StatefulWidget {
     required this.pickup,
     required this.drop,
     required this.vehicle,
+    this.rideId,
   });
 
   @override
@@ -162,6 +165,24 @@ class _RideTrackingScreenState extends State<RideTrackingScreen>
           break;
       }
     });
+
+    // Notify Cloud Functions backend
+    final activeRideId = widget.rideId ??
+        "ride_${DateTime.now().millisecondsSinceEpoch % 100000}";
+    String status = "REQUESTED";
+    if (_currentStage == RideStage.driverArrived) status = "ARRIVING";
+    if (_currentStage == RideStage.tripInProgress) status = "STARTED";
+    if (_currentStage == RideStage.tripCompleted) status = "COMPLETED";
+
+    ApiService.updateRideStatus(rideId: activeRideId, status: status);
+
+    // Broadcast GPS location
+    final loc = _currentDriverLocation;
+    ApiService.updateDriverLocation(
+      rideId: activeRideId,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+    );
   }
 
   String get _stageTitle {

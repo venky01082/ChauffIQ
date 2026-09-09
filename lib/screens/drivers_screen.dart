@@ -4,6 +4,7 @@ import '../data/driver_database.dart';
 import '../models/driver.dart';
 import '../widgets/driver_photo_widget.dart';
 import 'driver_details_screen.dart';
+import '../services/api_service.dart';
 
 class DriversScreen extends StatefulWidget {
   final String userName;
@@ -25,9 +26,49 @@ class DriversScreen extends StatefulWidget {
 
 class _DriversScreenState extends State<DriversScreen> {
   String _selectedFilter = "Smart Match";
+  List<Driver> _remoteDrivers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRemoteDrivers();
+  }
+
+  Future<void> _fetchRemoteDrivers() async {
+    try {
+      final remoteList = await ApiService.getAvailableDrivers();
+      if (remoteList.isNotEmpty && mounted) {
+        setState(() {
+          _remoteDrivers = remoteList.map((d) {
+            final map = d is Map ? d : <String, dynamic>{};
+            return Driver(
+              name: map["name"]?.toString() ?? "Professional Driver",
+              phone: map["phone"]?.toString() ?? "+91 98765 43210",
+              vehicleType: map["vehicleType"]?.toString() ??
+                  map["vehicleModel"]?.toString() ??
+                  widget.vehicle,
+              vehicleNumber:
+                  map["vehicleNumber"]?.toString() ?? "TS09XX1234",
+              rating: (map["rating"] is num)
+                  ? (map["rating"] as num).toDouble()
+                  : 4.9,
+              eta: "${map["eta"] ?? 4} min",
+              fare: (map["fare"] is num) ? (map["fare"] as num).toInt() : 450,
+            );
+          }).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint("Remote drivers fetch notice: $e");
+    }
+  }
 
   List<Driver> get _allDrivers {
-    final List<Driver> list = List.from(DriverDatabase.drivers);
+    final List<Driver> list = [];
+    if (_remoteDrivers.isNotEmpty) {
+      list.addAll(_remoteDrivers);
+    }
+    list.addAll(DriverDatabase.drivers);
     if (list.isEmpty) {
       // Provide high-quality fallback demo drivers
       list.addAll([

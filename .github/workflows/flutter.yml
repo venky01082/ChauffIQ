@@ -1,0 +1,46 @@
+name: Flutter CI / Quality Assurance
+
+on:
+  push:
+    branches:
+      - frontend-complete
+  pull_request:
+    branches:
+      - frontend-complete
+
+jobs:
+  flutter_test_and_build:
+    name: Analyze, Test & Build Flutter Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java for Android Builds
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Verify Flutter Installation
+        run: flutter --version
+
+      - name: Install Project Dependencies
+        run: flutter pub get
+
+      - name: Analyze Dart Code (Lints & Warnings)
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run Flutter Unit & Widget Test Suite
+        run: flutter test --coverage
+
+      - name: Build Flutter Web Bundle
+        run: flutter build web --release

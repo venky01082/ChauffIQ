@@ -47,3 +47,12 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Root backup and environment artifacts
+*.backup*
+.env*
+.firebase/
+functions/
+frontend/
+scratch/
+scripts/

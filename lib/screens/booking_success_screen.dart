@@ -8,6 +8,7 @@ class BookingSuccessScreen extends StatelessWidget {
   final String pickup;
   final String drop;
   final String vehicle;
+  final String? rideId;
 
   const BookingSuccessScreen({
     super.key,
@@ -16,6 +17,7 @@ class BookingSuccessScreen extends StatelessWidget {
     this.pickup = "",
     this.drop = "",
     this.vehicle = "",
+    this.rideId,
   });
 
   @override
@@ -87,6 +89,7 @@ class BookingSuccessScreen extends StatelessWidget {
                               pickup: pickup,
                               drop: drop,
                               vehicle: vehicle,
+                              rideId: rideId,
                             ),
                           ),
                         );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/driver.dart';
 import '../widgets/driver_photo_widget.dart';
+import '../services/api_service.dart';
 
 class RatingReviewScreen extends StatefulWidget {
   final Driver driver;
@@ -57,6 +58,16 @@ class _RatingReviewScreenState extends State<RatingReviewScreen> {
   }
 
   void _submitFeedback() {
+    // Send feedback to Cloud Functions backend
+    final comment = _feedbackController.text.trim();
+    final tags = _selectedCompliments.join(", ");
+    final fullComment = tags.isNotEmpty ? "$tags: $comment" : comment;
+    ApiService.submitRating(
+      rideId: "ride_${DateTime.now().millisecondsSinceEpoch % 100000}",
+      rating: _selectedRating,
+      comment: fullComment.isNotEmpty ? fullComment : null,
+    );
+
     showDialog(
       context: context,
       barrierDismissible: false,

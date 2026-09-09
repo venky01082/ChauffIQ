@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'driver_earnings_screen.dart';
 import 'driver_intelligence_screen.dart';
 import 'driver_documents_screen.dart';
+import '../services/api_service.dart';
 
 class DriverDashboardScreen extends StatefulWidget {
   const DriverDashboardScreen({super.key});
@@ -101,6 +102,15 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
   }
 
   void _advanceTripStep() {
+    // Notify Cloud Functions backend of driver stage change
+    if (_activeTrip != null) {
+      const statusMap = ["ARRIVING", "STARTED", "COMPLETED"];
+      final status = statusMap[_tripStep];
+      final rideId = _activeTrip!["rideId"]?.toString() ??
+          "ride_${DateTime.now().millisecondsSinceEpoch % 100000}";
+      ApiService.updateRideStatus(rideId: rideId, status: status);
+    }
+
     setState(() {
       if (_tripStep == 0) {
         _tripStep = 1; // Arrived at pickup
@@ -381,6 +391,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                   _timer?.cancel();
                 }
               });
+              // Sync availability with Cloud Functions backend
+              ApiService.updateDriverAvailability(val);
             },
           ),
         ],

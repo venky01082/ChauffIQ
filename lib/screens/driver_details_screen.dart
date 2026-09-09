@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/driver.dart';
 import '../widgets/driver_photo_widget.dart';
 import 'booking_success_screen.dart';
+import '../services/api_service.dart';
 
 class DriverDetailsScreen extends StatefulWidget {
   final String userName;
@@ -25,6 +26,7 @@ class DriverDetailsScreen extends StatefulWidget {
 }
 
 class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
+  bool _isBooking = false;
   bool _isFavorite = false;
   bool _shareWithFamily = true;
   String? _recurringSchedule; // null, "Daily (Mon-Fri)", "Weekly (Sundays)"
@@ -356,28 +358,76 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
                 ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => BookingSuccessScreen(
-                        driver: widget.driver,
-                        userName: widget.userName,
-                        pickup: widget.pickup,
-                        drop: widget.drop,
-                        vehicle: widget.vehicle,
+                onPressed: _isBooking
+                    ? null
+                    : () async {
+                        setState(() => _isBooking = true);
+
+                        String? createdRideId;
+                        try {
+                          final res = await ApiService.createRide(
+                            pickup: widget.pickup,
+                            drop: widget.drop,
+                            vehicleType: widget.vehicle.isNotEmpty
+                                ? widget.vehicle
+                                : widget.driver.vehicleType,
+                            fare: widget.driver.fare.toDouble(),
+                            driverId: widget.driver.phone,
+                          );
+                          if (res["success"] == true) {
+                            createdRideId = res["rideId"]?.toString();
+                          }
+                        } catch (e) {
+                          debugPrint("Backend ride creation notice: $e");
+                        }
+
+                        // Authorize Family Monitoring if toggled
+                        if (_shareWithFamily && createdRideId != null) {
+                          try {
+                            await ApiService.createFamilyMonitoring(
+                              rideId: createdRideId,
+                              familyMemberId: "family_circle_1",
+                              relationship: "Emergency Contact",
+                            );
+                          } catch (_) {}
+                        }
+
+                        if (!mounted) return;
+                        setState(() => _isBooking = false);
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BookingSuccessScreen(
+                              driver: widget.driver,
+                              userName: widget.userName,
+                              pickup: widget.pickup,
+                              drop: widget.drop,
+                              vehicle: widget.vehicle,
+                              rideId: createdRideId,
+                            ),
+                          ),
+                        );
+                      },
+                child: _isBooking
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : Text(
+                        _recurringSchedule != null
+                            ? 'Confirm Recurring Booking • ₹${widget.driver.fare}'
+                            : 'Confirm Booking • ₹${widget.driver.fare}',
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
                       ),
-                    ),
-                  );
-                },
-                child: Text(
-                  _recurringSchedule != null
-                      ? 'Confirm Recurring Booking • ₹${widget.driver.fare}'
-                      : 'Confirm Booking • ₹${widget.driver.fare}',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
               ),
             ),
           ],

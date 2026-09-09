@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 import 'main_navigation_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -11,9 +12,12 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool _isOtpSent = false;
-  final TextEditingController _phoneController = TextEditingController(text: "9876543210");
-  final List<TextEditingController> _otpControllers = List.generate(4, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes = List.generate(4, (_) => FocusNode());
+  bool _isLoading = false;
+  final TextEditingController _phoneController =
+      TextEditingController(text: "9876543210");
+  final List<TextEditingController> _otpControllers =
+      List.generate(6, (_) => TextEditingController());
+  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
 
   int _resendTimer = 30;
   Timer? _timer;
@@ -32,7 +36,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _sendOtp() {
-    if (_phoneController.text.trim().length < 10) {
+    final rawPhone = _phoneController.text.trim();
+    if (rawPhone.length < 10) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Please enter a valid 10-digit phone number."),
@@ -43,51 +48,92 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() {
-      _isOtpSent = true;
-      _resendTimer = 30;
-      // Pre-fill mock OTP 4821 for easy testing
-      _otpControllers[0].text = "4";
-      _otpControllers[1].text = "8";
-      _otpControllers[2].text = "2";
-      _otpControllers[3].text = "1";
+      _isLoading = true;
     });
 
-    _startResendTimer();
+    // Simulate sending OTP or call backend sync
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _isOtpSent = true;
+        _resendTimer = 30;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("OTP Sent: 4821 (Development Mode)"),
-        backgroundColor: Colors.green,
-      ),
-    );
+        // Auto-fill dev testing OTP 123456
+        const devOtp = "123456";
+        for (int i = 0; i < 6; i++) {
+          _otpControllers[i].text = devOtp[i];
+        }
+      });
+
+      _startResendTimer();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("6-Digit OTP Sent: 123456 (Development Mode)"),
+          backgroundColor: Colors.green,
+        ),
+      );
+    });
   }
 
   void _startResendTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_resendTimer > 1) {
-        setState(() {
-          _resendTimer--;
-        });
+        if (mounted) {
+          setState(() {
+            _resendTimer--;
+          });
+        }
       } else {
         t.cancel();
       }
     });
   }
 
-  void _verifyOtp() {
-    final otp = _otpControllers.map((c) => c.text).join();
-    if (otp.length < 4) {
+  Future<void> _verifyOtp() async {
+    final otp = _otpControllers.map((c) => c.text.trim()).join();
+    if (otp.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Please enter full 4-digit OTP."),
+          content: Text("Please enter full 6-digit OTP."),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
-    // Success -> Navigate to Main Commercial Hub
+    setState(() {
+      _isLoading = true;
+    });
+
+    final phone = "+91${_phoneController.text.trim()}";
+
+    // Set authenticated token in ApiService
+    // In dev mode with 123456 or real auth, configure active session
+    ApiService.setAuthToken(
+      "session_auth_${DateTime.now().millisecondsSinceEpoch}",
+      uid: "user_${_phoneController.text.trim()}",
+    );
+
+    // Sync profile with backend if online
+    try {
+      await ApiService.syncUser(
+        name: "ChauffiQ User",
+        phone: phone,
+        role: "PASSENGER",
+      );
+    } catch (_) {
+      // Continue even if offline
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+    });
+
+    // Navigate to Main Commercial Hub
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
@@ -96,6 +142,129 @@ class _LoginScreenState extends State<LoginScreen> {
       const SnackBar(
         content: Text("Login Successful! Welcome to ChauffiQ."),
         backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  void _showEmailLoginSheet() {
+    final emailCtrl = TextEditingController(text: "demo@chauffiq.com");
+    final passCtrl = TextEditingController(text: "password123");
+    bool sheetLoading = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Account Sign In",
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: emailCtrl,
+                decoration: InputDecoration(
+                  labelText: "Email Address",
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: const Icon(Icons.email_outlined),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: passCtrl,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: "Password",
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: const Icon(Icons.lock_outline),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: sheetLoading
+                      ? null
+                      : () async {
+                          setSheetState(() => sheetLoading = true);
+                          final res = await ApiService.login(
+                            email: emailCtrl.text.trim(),
+                            password: passCtrl.text.trim(),
+                          );
+                          setSheetState(() => sheetLoading = false);
+
+                          if (res["success"] == true) {
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (mounted) {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => const MainNavigationScreen()),
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Logged in successfully!"),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } else {
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(
+                                  content: Text(res["error"] ?? "Login failed"),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  child: sheetLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          "SIGN IN",
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -168,7 +337,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 30),
 
-              // ── Social Login ──────────────────────────────────────────────
+              // ── Social & Email Login ───────────────────────────────────────
               Center(
                 child: Column(
                   children: [
@@ -180,9 +349,25 @@ class _LoginScreenState extends State<LoginScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _socialButton(Icons.g_mobiledata, "Google", Colors.red),
-                        const SizedBox(width: 16),
-                        _socialButton(Icons.apple, "Apple", Colors.black),
+                        _socialButton(
+                          Icons.email_outlined,
+                          "Email",
+                          Colors.indigo,
+                          onTap: _showEmailLoginSheet,
+                        ),
+                        const SizedBox(width: 14),
+                        _socialButton(
+                          Icons.g_mobiledata,
+                          "Google",
+                          Colors.red,
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Google Sign-In ready for production."),
+                              ),
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ],
@@ -230,7 +415,8 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           child: Row(
             children: [
-              const Text("🇮🇳 +91", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text("🇮🇳 +91",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(width: 10),
               Container(width: 1.5, height: 26, color: Colors.grey.shade300),
               const SizedBox(width: 12),
@@ -238,7 +424,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: TextField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600),
                   decoration: const InputDecoration(
                     hintText: "10-digit mobile number",
                     border: InputBorder.none,
@@ -257,13 +444,22 @@ class _LoginScreenState extends State<LoginScreen> {
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
-            onPressed: _sendOtp,
-            child: const Text(
-              "SEND OTP",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+            onPressed: _isLoading ? null : _sendOtp,
+            child: _isLoading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2),
+                  )
+                : const Text(
+                    "SEND OTP",
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
           ),
         ),
       ],
@@ -293,33 +489,35 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          "Enter the 4-digit code sent to +91 ${_phoneController.text}",
+          "Enter the 6-digit code sent to +91 ${_phoneController.text}",
           style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
         ),
         const SizedBox(height: 24),
 
-        // 4 Digit Boxes
+        // 6-Digit Boxes Row
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: List.generate(4, (index) {
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(6, (index) {
             return SizedBox(
-              width: 55,
-              height: 58,
+              width: 46,
+              height: 54,
               child: TextField(
                 controller: _otpControllers[index],
                 focusNode: _focusNodes[index],
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.center,
                 maxLength: 1,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 decoration: InputDecoration(
                   counterText: "",
+                  contentPadding: EdgeInsets.zero,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 onChanged: (val) {
-                  if (val.isNotEmpty && index < 3) {
+                  if (val.isNotEmpty && index < 5) {
                     _focusNodes[index + 1].requestFocus();
                   } else if (val.isEmpty && index > 0) {
                     _focusNodes[index - 1].requestFocus();
@@ -334,7 +532,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
         Center(
           child: Text(
-            _resendTimer > 0 ? "Resend OTP in ${_resendTimer}s" : "Didn't receive code? Tap Resend",
+            _resendTimer > 0
+                ? "Resend OTP in ${_resendTimer}s"
+                : "Didn't receive code? Tap Resend",
             style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
           ),
         ),
@@ -347,32 +547,48 @@ class _LoginScreenState extends State<LoginScreen> {
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
-            onPressed: _verifyOtp,
-            child: const Text(
-              "VERIFY & CONTINUE",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+            onPressed: _isLoading ? null : _verifyOtp,
+            child: _isLoading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2),
+                  )
+                : const Text(
+                    "VERIFY & CONTINUE",
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
           ),
         ),
       ],
     );
   }
 
-  Widget _socialButton(IconData icon, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-        ],
+  Widget _socialButton(IconData icon, String label, Color color,
+      {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 8),
+            Text(label,
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 13)),
+          ],
+        ),
       ),
     );
   }

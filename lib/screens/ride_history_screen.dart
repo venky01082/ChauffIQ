@@ -1,7 +1,66 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
-class RideHistoryScreen extends StatelessWidget {
+class RideHistoryScreen extends StatefulWidget {
   const RideHistoryScreen({super.key});
+
+  @override
+  State<RideHistoryScreen> createState() => _RideHistoryScreenState();
+}
+
+class _RideHistoryScreenState extends State<RideHistoryScreen> {
+  List<Map<String, dynamic>> _remoteTrips = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchHistory();
+  }
+
+  Future<void> _fetchHistory() async {
+    try {
+      final trips = await ApiService.getTripHistory();
+      if (trips.isNotEmpty && mounted) {
+        setState(() {
+          _remoteTrips = trips.map((t) {
+            final map = t is Map ? t : <String, dynamic>{};
+            return {
+              "id": map["tripId"] ?? map["rideId"] ?? "CQ-${map.hashCode % 10000}",
+              "date": map["createdAt"] != null
+                  ? map["createdAt"]
+                      .toString()
+                      .substring(0, 16)
+                      .replaceAll("T", " ")
+                  : "Recent",
+              "driverName": map["driverName"] ?? "Professional Chauffeur",
+              "vehicle": map["vehicleModel"] ??
+                  map["vehicleType"] ??
+                  "Premium Vehicle",
+              "pickup": map["pickup"] ?? "Pickup Point",
+              "drop": map["destination"] ?? map["drop"] ?? "Destination",
+              "fare": map["fare"] ?? 500,
+              "status": map["status"] == "COMPLETED"
+                  ? "Completed"
+                  : (map["status"] ?? "Completed"),
+              "rating": map["rating"] ?? 5,
+              "paymentMethod": map["paymentMethod"] ?? "Online Payment",
+            };
+          }).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint("Trip history fetch notice: $e");
+    }
+  }
+
+  List<Map<String, dynamic>> get _allPastTrips {
+    final list = <Map<String, dynamic>>[];
+    if (_remoteTrips.isNotEmpty) {
+      list.addAll(_remoteTrips);
+    }
+    list.addAll(pastTrips);
+    return list;
+  }
 
   // Mock list of past trips
   static final List<Map<String, dynamic>> pastTrips = [
@@ -180,9 +239,9 @@ class RideHistoryScreen extends StatelessWidget {
             // ── Tab 1: Past Trips ───────────────────────────────────────────
             ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: pastTrips.length,
+              itemCount: _allPastTrips.length,
               itemBuilder: (context, index) {
-                final trip = pastTrips[index];
+                final trip = _allPastTrips[index];
                 final isCompleted = trip["status"] == "Completed";
 
                 return Card(
