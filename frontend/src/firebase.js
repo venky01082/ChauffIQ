@@ -49,9 +49,15 @@ export async function getFirebaseApp() {
   }
 
   if (!config) {
-    throw new Error(
-      'Firebase configuration is not initialized. Please ensure environment variables or Firebase Hosting init.json is available.'
-    );
+    // 3. Fallback to public project configuration when running outside Firebase Hosting (e.g. Vite dev server)
+    config = {
+      apiKey: 'AIzaSyCj7w7JAlJOSRlCIP_6XYLxhPCOtXhEVzM',
+      authDomain: 'chauffiq-a0366.firebaseapp.com',
+      projectId: 'chauffiq-a0366',
+      storageBucket: 'chauffiq-a0366.firebasestorage.app',
+      messagingSenderId: '479028083173',
+      appId: '1:479028083173:web:64305c55013fbdfb84970c',
+    };
   }
 
   appInstance = initializeApp(config);

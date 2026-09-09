@@ -6,7 +6,7 @@
  */
 
 const DEFAULT_BASE_URL =
-  "http://127.0.0.1:5001/chauffiq-a0366/asia-southeast1";
+  "https://asia-southeast1-chauffiq-a0366.cloudfunctions.net";
 
 /**
  * Resolves the backend base URL.
