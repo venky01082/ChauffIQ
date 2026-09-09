@@ -396,14 +396,17 @@ class ApiService {
     required String rideId,
     required int rating,
     String? comment,
+    String? feedback,
   }) async {
     try {
+      final cleanFeedback = feedback ?? comment ?? "";
       final res = await http.post(
         Uri.parse("$baseUrl/submitRating"),
         headers: _headers,
         body: jsonEncode({
           "rideId": rideId,
           "rating": rating,
+          "feedback": cleanFeedback,
           if (comment != null) "comment": comment,
         }),
       );
@@ -438,18 +441,20 @@ class ApiService {
   // ── 18. Process Ride Payment (/createPayment) ─────────────────────────────
   static Future<Map<String, dynamic>> createPayment({
     required String rideId,
-    required double amount,
+    double? amount,
     String paymentMethod = "CARD",
   }) async {
     try {
+      final Map<String, dynamic> payload = {
+        "rideId": rideId,
+        "paymentMethod": paymentMethod,
+      };
+      if (amount != null) payload["amount"] = amount;
+
       final res = await http.post(
         Uri.parse("$baseUrl/createPayment"),
         headers: _headers,
-        body: jsonEncode({
-          "rideId": rideId,
-          "amount": amount,
-          "paymentMethod": paymentMethod,
-        }),
+        body: jsonEncode(payload),
       );
 
       final data = jsonDecode(res.body);
@@ -465,15 +470,18 @@ class ApiService {
   // ── 19. Payment Simulation Result (/simulatePaymentResult) ────────────────
   static Future<Map<String, dynamic>> simulatePaymentResult({
     required String paymentId,
-    String status = "COMPLETED",
+    String outcome = "SUCCESS",
+    String? status,
   }) async {
     try {
+      final validOutcome = (outcome == "COMPLETED" || outcome == "SUCCESS") ? "SUCCESS" : outcome;
       final res = await http.post(
         Uri.parse("$baseUrl/simulatePaymentResult"),
         headers: _headers,
         body: jsonEncode({
           "paymentId": paymentId,
-          "status": status,
+          "outcome": validOutcome,
+          "status": status ?? validOutcome,
         }),
       );
 
