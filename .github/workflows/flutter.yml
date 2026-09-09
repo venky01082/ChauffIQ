@@ -44,3 +44,13 @@ jobs:
 
       - name: Build Flutter Web Bundle
         run: flutter build web --release
+
+      - name: Build Android Release APK
+        run: flutter build apk --release
+
+      - name: Upload Android Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chauffiq-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: warn
