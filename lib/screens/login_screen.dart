@@ -249,33 +249,31 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
                           setSheetState(() => sheetLoading = false);
 
+                          if (!mounted) return;
+
                           if (res["success"] == true) {
-                            if (ctx.mounted) Navigator.pop(ctx);
-                            if (mounted) {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => const MainNavigationScreen()),
-                              );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(isRegisterMode
-                                      ? "Account created & logged in!"
-                                      : "Logged in successfully!"),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                            }
+                            Navigator.of(context, rootNavigator: true).pop();
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const MainNavigationScreen()),
+                            );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(isRegisterMode
+                                    ? "Account created & logged in!"
+                                    : "Logged in successfully!"),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
                           } else {
-                            if (ctx.mounted) {
-                              ScaffoldMessenger.of(ctx).showSnackBar(
-                                SnackBar(
-                                  content: Text(res["error"] ??
-                                      (isRegisterMode ? "Registration failed" : "Login failed")),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(res["error"] ??
+                                    (isRegisterMode ? "Registration failed" : "Login failed")),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
                           }
                         },
                   child: sheetLoading
