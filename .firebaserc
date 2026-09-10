@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "chauffiq-a0366"
+  },
+  "targets": {
+    "chauffiq-a0366": {
+      "hosting": {
+        "chauffiq-flutter": [
+          "chauffiq-flutter"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

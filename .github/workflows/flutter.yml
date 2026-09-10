@@ -13,6 +13,8 @@ jobs:
     name: Analyze, Test & Build Flutter Frontend
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Repository
@@ -44,6 +46,42 @@ jobs:
 
       - name: Build Flutter Web Bundle
         run: flutter build web --release
+
+      - name: Upload Flutter Web Bundle Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chauffiq-flutter-web
+          path: build/web
+
+      - name: Publish Flutter Web to web-build branch
+        if: github.ref == 'refs/heads/frontend-complete' && github.event_name == 'push'
+        run: |
+          cd build/web
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b web-build
+          git add -A
+          git commit -m "build: deploy flutter web release"
+          git push -f https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git web-build
+          cd ../..
+
+      - name: Create Web Release Archive
+        if: github.ref == 'refs/heads/frontend-complete' && github.event_name == 'push'
+        run: |
+          cd build/web
+          zip -r ../../chauffiq-flutter-web.zip .
+          cd ../..
+
+      - name: Publish Flutter Web Release Asset
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/frontend-complete' && github.event_name == 'push'
+        with:
+          tag_name: flutter-web-latest
+          name: "ChauffIQ Flutter Web Release"
+          files: chauffiq-flutter-web.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Android Release APK
         run: flutter build apk --release

@@ -147,8 +147,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showEmailLoginSheet() {
+    final nameCtrl = TextEditingController(text: "ChauffiQ User");
     final emailCtrl = TextEditingController(text: "demo@chauffiq.com");
     final passCtrl = TextEditingController(text: "password123");
+    bool isRegisterMode = false;
     bool sheetLoading = false;
 
     showModalBottomSheet(
@@ -172,9 +174,9 @@ class _LoginScreenState extends State<LoginScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    "Account Sign In",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  Text(
+                    isRegisterMode ? "Create Account" : "Account Sign In",
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
@@ -183,6 +185,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
               const SizedBox(height: 16),
+              if (isRegisterMode) ...[
+                TextField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: "Full Name",
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    prefixIcon: const Icon(Icons.person_outline),
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
               TextField(
                 controller: emailCtrl,
                 decoration: InputDecoration(
@@ -214,10 +227,26 @@ class _LoginScreenState extends State<LoginScreen> {
                       ? null
                       : () async {
                           setSheetState(() => sheetLoading = true);
-                          final res = await ApiService.login(
-                            email: emailCtrl.text.trim(),
-                            password: passCtrl.text.trim(),
-                          );
+                          Map<String, dynamic> res;
+                          if (isRegisterMode) {
+                            res = await ApiService.register(
+                              name: nameCtrl.text.trim(),
+                              email: emailCtrl.text.trim(),
+                              password: passCtrl.text.trim(),
+                            );
+                            if (res["success"] == true) {
+                              // If registration succeeded, login to establish full session
+                              await ApiService.login(
+                                email: emailCtrl.text.trim(),
+                                password: passCtrl.text.trim(),
+                              );
+                            }
+                          } else {
+                            res = await ApiService.login(
+                              email: emailCtrl.text.trim(),
+                              password: passCtrl.text.trim(),
+                            );
+                          }
                           setSheetState(() => sheetLoading = false);
 
                           if (res["success"] == true) {
@@ -229,8 +258,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                     builder: (_) => const MainNavigationScreen()),
                               );
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("Logged in successfully!"),
+                                SnackBar(
+                                  content: Text(isRegisterMode
+                                      ? "Account created & logged in!"
+                                      : "Logged in successfully!"),
                                   backgroundColor: Colors.green,
                                 ),
                               );
@@ -239,7 +270,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             if (ctx.mounted) {
                               ScaffoldMessenger.of(ctx).showSnackBar(
                                 SnackBar(
-                                  content: Text(res["error"] ?? "Login failed"),
+                                  content: Text(res["error"] ??
+                                      (isRegisterMode ? "Registration failed" : "Login failed")),
                                   backgroundColor: Colors.red,
                                 ),
                               );
@@ -255,11 +287,27 @@ class _LoginScreenState extends State<LoginScreen> {
                             strokeWidth: 2,
                           ),
                         )
-                      : const Text(
-                          "SIGN IN",
-                          style: TextStyle(
+                      : Text(
+                          isRegisterMode ? "CREATE ACCOUNT" : "SIGN IN",
+                          style: const TextStyle(
                               fontSize: 16, fontWeight: FontWeight.bold),
                         ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: TextButton(
+                  onPressed: () {
+                    setSheetState(() {
+                      isRegisterMode = !isRegisterMode;
+                    });
+                  },
+                  child: Text(
+                    isRegisterMode
+                        ? "Already have an account? Sign In"
+                        : "Don't have an account? Register",
+                    style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],

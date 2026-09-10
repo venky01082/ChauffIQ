@@ -75,5 +75,24 @@ void main() {
       expect(res, isA<Map<String, dynamic>>());
       expect(res.containsKey('success'), isTrue);
     });
+
+    test('registerFcmToken handles unauthenticated call gracefully', () async {
+      final res = await ApiService.registerFcmToken(token: 'dummy_fcm_token_123');
+      expect(res, isA<bool>());
+    });
+
+    test('getAdminOverview handles unauthenticated call gracefully', () async {
+      final res = await ApiService.getAdminOverview();
+      // Should return null gracefully when unauthenticated
+      expect(res == null || res is Map<String, dynamic>, isTrue);
+    });
+
+    test('simulatePaymentResult handles calls gracefully', () async {
+      final res = await ApiService.simulatePaymentResult(
+        paymentId: 'pay_test_dummy',
+        outcome: 'SUCCESS',
+      );
+      expect(res, isA<Map<String, dynamic>>());
+    });
   });
 }

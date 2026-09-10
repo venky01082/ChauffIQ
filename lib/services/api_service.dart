@@ -105,6 +105,38 @@ class ApiService {
         }
         return {"success": true, "data": data};
       }
+
+      // Resilient fallback to Firebase Identity Toolkit if /login returns configuration error
+      try {
+        const apiKey = "AIzaSyCj7w7JAlJOSRlCIP_6XYLxhPCOtXhEVzM";
+        final idRes = await http.post(
+          Uri.parse(
+              "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$apiKey"),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({
+            "email": email,
+            "password": password,
+            "returnSecureToken": true,
+          }),
+        );
+        if (idRes.statusCode == 200) {
+          final idData = jsonDecode(idRes.body);
+          final idToken = idData["idToken"];
+          final localId = idData["localId"];
+          if (idToken != null) {
+            setAuthToken(idToken.toString(), uid: localId?.toString());
+            await syncUser(name: idData["displayName"]);
+            return {
+              "success": true,
+              "data": {
+                "idToken": idToken,
+                "user": {"uid": localId, "email": email}
+              }
+            };
+          }
+        }
+      } catch (_) {}
+
       return {
         "success": false,
         "error": data["message"] ?? data["error"] ?? "Login failed",
@@ -316,7 +348,12 @@ class ApiService {
       );
 
       if (res.statusCode == 200) {
-        return jsonDecode(res.body) as Map<String, dynamic>;
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        if (data["location"] is Map) {
+          final loc = Map<String, dynamic>.from(data["location"] as Map);
+          return {...data, ...loc};
+        }
+        return data;
       }
       return null;
     } catch (e) {
@@ -381,6 +418,7 @@ class ApiService {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data is List) return data;
+        if (data is Map && data["rides"] is List) return data["rides"];
         if (data is Map && data["trips"] is List) return data["trips"];
         if (data is Map && data["history"] is List) return data["history"];
       }
@@ -492,6 +530,175 @@ class ApiService {
       };
     } catch (e) {
       return {"success": false, "error": e.toString()};
+    }
+  }
+
+  // ── 20. FCM Token Registration (/registerFcmToken) ───────────────────────
+  static Future<bool> registerFcmToken({
+    required String token,
+    Map<String, dynamic>? deviceInfo,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse("$baseUrl/registerFcmToken"),
+        headers: _headers,
+        body: jsonEncode({
+          "token": token,
+          if (deviceInfo != null) "deviceInfo": deviceInfo,
+        }),
+      );
+      return res.statusCode == 200 || res.statusCode == 201;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ── 21. Admin Dashboard Overview (/getAdminOverview) ─────────────────────
+  static Future<Map<String, dynamic>?> getAdminOverview() async {
+    try {
+      final res = await http.get(
+        Uri.parse("$baseUrl/getAdminOverview"),
+        headers: _headers,
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data is Map<String, dynamic>) return data;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ── 22. Admin Query Users (/getAdminUsers) ────────────────────────────────
+  static Future<List<dynamic>> getAdminUsers({
+    int limit = 25,
+    String? role,
+    String? search,
+  }) async {
+    try {
+      final queryParams = [
+        "limit=$limit",
+        if (role != null) "role=$role",
+        if (search != null) "search=$search",
+      ].join("&");
+      final res = await http.get(
+        Uri.parse("$baseUrl/getAdminUsers?$queryParams"),
+        headers: _headers,
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data is Map && data["users"] is List) return data["users"];
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // ── 23. Admin Query Drivers (/getAdminDrivers) ────────────────────────────
+  static Future<List<dynamic>> getAdminDrivers({
+    int limit = 25,
+    bool? isAvailable,
+  }) async {
+    try {
+      final queryParams = [
+        "limit=$limit",
+        if (isAvailable != null) "isAvailable=$isAvailable",
+      ].join("&");
+      final res = await http.get(
+        Uri.parse("$baseUrl/getAdminDrivers?$queryParams"),
+        headers: _headers,
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data is Map && data["drivers"] is List) return data["drivers"];
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // ── 24. Admin Query Rides (/getAdminRides) ────────────────────────────────
+  static Future<List<dynamic>> getAdminRides({
+    int limit = 25,
+    String? status,
+  }) async {
+    try {
+      final queryParams = [
+        "limit=$limit",
+        if (status != null) "status=$status",
+      ].join("&");
+      final res = await http.get(
+        Uri.parse("$baseUrl/getAdminRides?$queryParams"),
+        headers: _headers,
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data is Map && data["rides"] is List) return data["rides"];
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // ── 25. Admin Query Payments (/getAdminPayments) ──────────────────────────
+  static Future<List<dynamic>> getAdminPayments({
+    int limit = 25,
+    String? status,
+  }) async {
+    try {
+      final queryParams = [
+        "limit=$limit",
+        if (status != null) "status=$status",
+      ].join("&");
+      final res = await http.get(
+        Uri.parse("$baseUrl/getAdminPayments?$queryParams"),
+        headers: _headers,
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data is Map && data["payments"] is List) return data["payments"];
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // ── 26. Admin Query Ratings (/getAdminRatings) ────────────────────────────
+  static Future<List<dynamic>> getAdminRatings({int limit = 25}) async {
+    try {
+      final res = await http.get(
+        Uri.parse("$baseUrl/getAdminRatings?limit=$limit"),
+        headers: _headers,
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data is Map && data["ratings"] is List) return data["ratings"];
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // ── 27. Admin Ride Details (/getAdminRideDetails) ─────────────────────────
+  static Future<Map<String, dynamic>?> getAdminRideDetails(String rideId) async {
+    try {
+      final res = await http.get(
+        Uri.parse("$baseUrl/getAdminRideDetails?rideId=$rideId"),
+        headers: _headers,
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data is Map<String, dynamic>) return data;
+      }
+      return null;
+    } catch (e) {
+      return null;
     }
   }
 }

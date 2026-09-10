@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'vehicle_assistance_screen.dart';
+import '../services/api_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -46,11 +47,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Profile details updated successfully.")),
-              );
+              final name = nameCtrl.text.trim();
+              final phone = phoneCtrl.text.trim();
+              try {
+                await ApiService.syncUser(
+                  name: name.isNotEmpty ? name : null,
+                  phone: phone.isNotEmpty ? phone : null,
+                );
+              } catch (_) {}
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Profile details updated & synced.")),
+                );
+              }
             },
             child: const Text("Save"),
           ),

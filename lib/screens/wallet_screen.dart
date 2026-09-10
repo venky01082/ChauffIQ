@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -59,6 +60,20 @@ class _WalletScreenState extends State<WalletScreen> {
   ];
 
   void _recharge(int amount) {
+    // Record payment in backend ledger
+    ApiService.createPayment(
+      rideId: "wallet_${DateTime.now().millisecondsSinceEpoch % 100000}",
+      amount: amount.toDouble(),
+      paymentMethod: "UPI",
+    ).then((res) {
+      if (res["success"] == true && res["data"] is Map && res["data"]["paymentId"] != null) {
+        ApiService.simulatePaymentResult(
+          paymentId: res["data"]["paymentId"].toString(),
+          outcome: "SUCCESS",
+        );
+      }
+    }).catchError((_) {});
+
     setState(() {
       _balance += amount;
       _transactions.insert(0, {

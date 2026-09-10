@@ -989,6 +989,7 @@ class _RideTrackingScreenState extends State<RideTrackingScreen>
                     builder: (_) => RatingReviewScreen(
                       driver: widget.driver,
                       fare: widget.driver.fare,
+                      rideId: widget.rideId,
                     ),
                   ),
                 );

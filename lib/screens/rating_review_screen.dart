@@ -6,11 +6,13 @@ import '../services/api_service.dart';
 class RatingReviewScreen extends StatefulWidget {
   final Driver driver;
   final int fare;
+  final String? rideId;
 
   const RatingReviewScreen({
     super.key,
     required this.driver,
     required this.fare,
+    this.rideId,
   });
 
   @override
@@ -62,8 +64,10 @@ class _RatingReviewScreenState extends State<RatingReviewScreen> {
     final comment = _feedbackController.text.trim();
     final tags = _selectedCompliments.join(", ");
     final fullComment = tags.isNotEmpty ? "$tags: $comment" : comment;
+    final targetRideId = widget.rideId ??
+        "ride_${DateTime.now().millisecondsSinceEpoch % 100000}";
     ApiService.submitRating(
-      rideId: "ride_${DateTime.now().millisecondsSinceEpoch % 100000}",
+      rideId: targetRideId,
       rating: _selectedRating,
       comment: fullComment.isNotEmpty ? fullComment : null,
     );
